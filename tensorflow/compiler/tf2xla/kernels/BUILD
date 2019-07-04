@@ -114,6 +114,7 @@ tf_kernel_library(
         "xla_select_and_scatter_op.cc",
         "xla_self_adjoint_eig_op.cc",
         "xla_svd_op.cc",
+        "xla_allreduce.cc",
     ],
     hdrs = [
         "index_ops.h",
