@@ -21,25 +21,33 @@ class XlaAllReduceOp : public XlaOpKernel {
   explicit XlaAllReduceOp(OpKernelConstruction* ctx) : XlaOpKernel(ctx) {}
 
   void Compile(XlaOpKernelContext* ctx) override {
+
+    // Get input and input shape from context
+    xla::XlaOp input = ctx->Input(0);
     const TensorShape input_shape = ctx->InputShape(0);
 
+    // Create output shape
+    TensorShape output_shape;
+    for (int d = 0; d < input_shape.dims(); ++d) {
+        output_shape.AddDim(input_shape.dim_size(d));
+    }
+
+    // Get output data type
     const DataType dtype = output_type(0);
     xla::PrimitiveType output_type;
     OP_REQUIRES_OK(ctx, DataTypeToPrimitiveType(dtype, &output_type));
 
-    xla::XlaOp output;
-    TensorShape output_shape;
-    for (int d = 0; d < input_shape.dims(); ++d) {
-      output_shape.AddDim(input_shape.dim_size(d));
-    }
-
+    // Grab the XLA Builder from context
     xla::XlaBuilder& b = *ctx->builder();
 
-    std::string opaque = "whatever";
-    xla::XlaOp param0 = xla::Parameter(&b, 0, xla::ShapeUtil::MakeShape(xla::F32, {128}), "p0");
-    xla::CustomCall(&b, "do_custom_call", {param0}, xla::ShapeUtil::MakeShape(xla::F32, {2048}), opaque);
+    // Create the custom call
+    std::string opaque = "not_used";
+    xla::XlaOp output = xla::CustomCall(&b, "do_custom_call", {input}, xla::ShapeUtil::MakeShape(output_type, output_shape.dim_sizes()), opaque);
 
-    output = xla::ConvertElementType(output, output_type);
+    // Convert to the correct type
+    // output = xla::ConvertElementType(output, output_type);
+    
+    // Set output
     ctx->SetOutput(0, output);
   }
 
