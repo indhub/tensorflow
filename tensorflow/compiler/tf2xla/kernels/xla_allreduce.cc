@@ -10,10 +10,49 @@
 #include "tensorflow/core/framework/tensor.h"
 #include "tensorflow/core/framework/tensor_shape.h"
 
+#include <cuda.h>
+#include <cuda_runtime.h>
+
+#define CUDACHECK(cmd) do {                         \
+  cudaError_t e = cmd;                              \
+  if( e != cudaSuccess ) {                          \
+    printf("Failed: Cuda error %s:%d '%s'\n",       \
+        __FILE__,__LINE__,cudaGetErrorString(e));   \
+    exit(EXIT_FAILURE);                             \
+  }                                                 \
+} while(0)
+
 namespace tensorflow {
 namespace {
 
-void do_custom_call(void* out, const void** in) {
+const char* getInt(const char *ptr, int *value) {
+    
+    // Get the first digit
+    *value = *ptr - '0';
+    ptr++;
+
+    // Get subsequent digits until delimiter
+    while(*ptr != '|') {
+        *value = *value * 10 + (*ptr - '0');
+    }
+    ptr++; // Move pointer to the character after delimited
+
+    return ptr;
+}
+
+// TODO(thangakr): Modify this function to handle types other than FP32
+void do_custom_call(CUstream stream, void** buffers,
+        const char* opaque, size_t opaque_len) {
+    
+    // Get ptr to input and output
+    const float* input = reinterpret_cast<const float*>(buffers[0]);
+    float* output = reinterpret_cast<float*>(buffers[1]);
+
+    // Get buffer length
+    int buffer_len = 0;
+    getInt(opaque, &buffer_len);
+
+    CUDACHECK(cudaMemcpy(output, input, buffer_len * sizeof(float), cudaMemcpyDeviceToDevice));
 }
 
 class XlaAllReduceOp : public XlaOpKernel {
