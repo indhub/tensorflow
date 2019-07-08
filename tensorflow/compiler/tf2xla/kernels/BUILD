@@ -194,6 +194,7 @@ tf_kernel_library(
         "//tensorflow/core/kernels:stack_ops",
         "//tensorflow/core/kernels:stateful_random_ops",
         "//tensorflow/core/kernels:training_ops",
+        "//tensorflow/compiler/xla/service:custom_call_target_registry",
         "@com_google_absl//absl/algorithm:container",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/types:optional",

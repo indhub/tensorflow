@@ -10,6 +10,8 @@
 #include "tensorflow/core/framework/tensor.h"
 #include "tensorflow/core/framework/tensor_shape.h"
 
+#include "tensorflow/compiler/xla/service/custom_call_target_registry.h"
+
 #include <cuda.h>
 #include <cuda_runtime.h>
 
@@ -43,7 +45,8 @@ const char* getInt(const char *ptr, int *value) {
 // TODO(thangakr): Modify this function to handle types other than FP32
 void do_custom_call(CUstream stream, void** buffers,
         const char* opaque, size_t opaque_len) {
-    
+
+/*    
     // Get ptr to input and output
     const float* input = reinterpret_cast<const float*>(buffers[0]);
     float* output = reinterpret_cast<float*>(buffers[1]);
@@ -53,7 +56,11 @@ void do_custom_call(CUstream stream, void** buffers,
     getInt(opaque, &buffer_len);
 
     CUDACHECK(cudaMemcpy(output, input, buffer_len * sizeof(float), cudaMemcpyDeviceToDevice));
+*/
 }
+
+//XLA_REGISTER_CUSTOM_CALL_TARGET(do_custom_call, "CUDA");
+XLA_CPU_REGISTER_CUSTOM_CALL_TARGET(do_custom_call);
 
 class XlaAllReduceOp : public XlaOpKernel {
  public:
@@ -65,11 +72,9 @@ class XlaAllReduceOp : public XlaOpKernel {
     xla::XlaOp input = ctx->Input(0);
     const TensorShape input_shape = ctx->InputShape(0);
 
-    // Create output shape
+    // Create output shape. Note: Input/Output of XlaAllReduce is 1-D
     TensorShape output_shape;
-    for (int d = 0; d < input_shape.dims(); ++d) {
-        output_shape.AddDim(input_shape.dim_size(d));
-    }
+    output_shape.AddDim(input_shape.dim_size(0));
 
     // Get output data type
     const DataType dtype = output_type(0);
@@ -80,7 +85,7 @@ class XlaAllReduceOp : public XlaOpKernel {
     xla::XlaBuilder& b = *ctx->builder();
 
     // Create the custom call
-    std::string opaque = "not_used";
+    std::string opaque = std::to_string(input_shape.dim_size(0)) + "|";
     xla::XlaOp output = xla::CustomCall(&b, "do_custom_call", {input}, xla::ShapeUtil::MakeShape(output_type, output_shape.dim_sizes()), opaque);
 
     // Convert to the correct type
@@ -94,9 +99,7 @@ class XlaAllReduceOp : public XlaOpKernel {
   TF_DISALLOW_COPY_AND_ASSIGN(XlaAllReduceOp);
 };
 
-REGISTER_XLA_OP(Name("XLAAllReduce")
-                    .CompileTimeConstantInput("dimension"),
-                XlaAllReduceOp);
+REGISTER_XLA_OP(Name("XlaAllReduce"), XlaAllReduceOp);
 
 }  // namespace
 }  // namespace tensorflow
