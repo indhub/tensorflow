@@ -42,11 +42,11 @@ const char* getInt(const char *ptr, int *value) {
     return ptr;
 }
 
+/*
 // TODO(thangakr): Modify this function to handle types other than FP32
 void do_custom_call(CUstream stream, void** buffers,
         const char* opaque, size_t opaque_len) {
 
-/*    
     // Get ptr to input and output
     const float* input = reinterpret_cast<const float*>(buffers[0]);
     float* output = reinterpret_cast<float*>(buffers[1]);
@@ -56,10 +56,14 @@ void do_custom_call(CUstream stream, void** buffers,
     getInt(opaque, &buffer_len);
 
     CUDACHECK(cudaMemcpy(output, input, buffer_len * sizeof(float), cudaMemcpyDeviceToDevice));
-*/
 }
 
-//XLA_REGISTER_CUSTOM_CALL_TARGET(do_custom_call, "CUDA");
+XLA_REGISTER_CUSTOM_CALL_TARGET(do_custom_call, "CUDA");
+*/
+
+void do_custom_call(void* out, const void** in) {
+}
+
 XLA_CPU_REGISTER_CUSTOM_CALL_TARGET(do_custom_call);
 
 class XlaAllReduceOp : public XlaOpKernel {
