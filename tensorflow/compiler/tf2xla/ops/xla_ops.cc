@@ -599,9 +599,10 @@ REGISTER_OP("XlaReplicaId")
 
 REGISTER_OP("XlaAllReduce")
     .Input("input: T")
+    .Input("var_id: uint32")
     .Output("output: T")
     .Attr("T: type")
-    .SetShapeFn(shape_inference::UnchangedShape)
+    .SetShapeFn(shape_inference::UnknownShape)
     .Doc(R"doc(
 AllReduce OP that works inside XLA.
 

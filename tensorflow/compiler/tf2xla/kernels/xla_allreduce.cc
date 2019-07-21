@@ -15,6 +15,9 @@
 #include <cuda.h>
 #include <cuda_runtime.h>
 
+#include <chrono>
+#include <thread>
+
 #define CUDACHECK(cmd) do {                         \
   cudaError_t e = cmd;                              \
   if( e != cudaSuccess ) {                          \
@@ -42,11 +45,12 @@ const char* getInt(const char *ptr, int *value) {
     return ptr;
 }
 
-/*
+
 // TODO(thangakr): Modify this function to handle types other than FP32
 void do_custom_call(CUstream stream, void** buffers,
         const char* opaque, size_t opaque_len) {
 
+    /*
     // Get ptr to input and output
     const float* input = reinterpret_cast<const float*>(buffers[0]);
     float* output = reinterpret_cast<float*>(buffers[1]);
@@ -56,15 +60,22 @@ void do_custom_call(CUstream stream, void** buffers,
     getInt(opaque, &buffer_len);
 
     CUDACHECK(cudaMemcpy(output, input, buffer_len * sizeof(float), cudaMemcpyDeviceToDevice));
+    */
+    std::cout << "wtf" << std::endl;
+    auto ticks = std::chrono::system_clock::now().time_since_epoch().count();
+    std::cout << "Time: " << ticks << std::endl;
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
 }
 
 XLA_REGISTER_CUSTOM_CALL_TARGET(do_custom_call, "CUDA");
-*/
 
+
+/*
 void do_custom_call(void* out, const void** in) {
 }
 
 XLA_CPU_REGISTER_CUSTOM_CALL_TARGET(do_custom_call);
+*/
 
 class XlaAllReduceOp : public XlaOpKernel {
  public:
@@ -76,12 +87,13 @@ class XlaAllReduceOp : public XlaOpKernel {
     xla::XlaOp input = ctx->Input(0);
     const TensorShape input_shape = ctx->InputShape(0);
 
-    // Create output shape. Note: Input/Output of XlaAllReduce is 1-D
+    // Output is just one int32 which is an opaque data 
+    // that must be handed back to the operator that completes the AllReduce
     TensorShape output_shape;
-    output_shape.AddDim(input_shape.dim_size(0));
+    output_shape.AddDim(1);
 
-    // Get output data type
-    const DataType dtype = output_type(0);
+    // Output datatype is int32
+    const DataType dtype = DataType::DT_INT32;
     xla::PrimitiveType output_type;
     OP_REQUIRES_OK(ctx, DataTypeToPrimitiveType(dtype, &output_type));
 
@@ -94,7 +106,7 @@ class XlaAllReduceOp : public XlaOpKernel {
 
     // Convert to the correct type
     // output = xla::ConvertElementType(output, output_type);
-    
+
     // Set output
     ctx->SetOutput(0, output);
   }
