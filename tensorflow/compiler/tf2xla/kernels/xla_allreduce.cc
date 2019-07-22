@@ -61,9 +61,8 @@ void do_custom_call(CUstream stream, void** buffers,
 
     CUDACHECK(cudaMemcpy(output, input, buffer_len * sizeof(float), cudaMemcpyDeviceToDevice));
     */
-    auto ticks = std::chrono::system_clock::now().time_since_epoch().count();
-    std::cout << "Time: " << ticks << std::endl;
-    //std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    unsigned long milliseconds_since_epoch = std::chrono::duration_cast<std::chrono::milliseconds> (std::chrono::system_clock::now().time_since_epoch()).count();
+    std::cout << "Time: " << milliseconds_since_epoch << std::endl;
 }
 
 XLA_REGISTER_CUSTOM_CALL_TARGET(do_custom_call, "CUDA");
