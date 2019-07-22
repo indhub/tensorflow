@@ -50,6 +50,11 @@ const char* getInt(const char *ptr, int *value) {
 void do_custom_call(CUstream stream, void** buffers,
         const char* opaque, size_t opaque_len) {
 
+    const uint32* var_id = reinterpret_cast<const uint32*>(buffers[1]);
+    const int64 flat_len = reinterpret_cast<const int64*>(buffers[2])[0];
+
+    uint32 var_id_cpu;
+    cudaMemcpy(&var_id_cpu, var_id, sizeof(uint32), cudaMemcpyDeviceToHost);
     /*
     // Get ptr to input and output
     const float* input = reinterpret_cast<const float*>(buffers[0]);
@@ -62,7 +67,7 @@ void do_custom_call(CUstream stream, void** buffers,
     CUDACHECK(cudaMemcpy(output, input, buffer_len * sizeof(float), cudaMemcpyDeviceToDevice));
     */
     unsigned long milliseconds_since_epoch = std::chrono::duration_cast<std::chrono::milliseconds> (std::chrono::system_clock::now().time_since_epoch()).count();
-    std::cout << "Time: " << milliseconds_since_epoch << std::endl;
+    std::cout << "var_id: " << var_id_cpu << " len: " << opaque << " Time: " << milliseconds_since_epoch << std::endl;
 }
 
 XLA_REGISTER_CUSTOM_CALL_TARGET(do_custom_call, "CUDA");
@@ -89,8 +94,12 @@ class XlaAllReduceOp : public XlaOpKernel {
     // that must be handed back to the operator that completes the AllReduce
     TensorShape output_shape;
     //output_shape.AddDim(1);
+    int64 flat_len = 1;
     for (int d = 0; d < input_shape.dims(); ++d) {
-      output_shape.AddDim(input_shape.dim_size(d));
+      int64 dim_size = input_shape.dim_size(d);
+      output_shape.AddDim(dim_size);
+
+      flat_len *= dim_size;
     }
 
     // Output datatype is int32
@@ -102,9 +111,15 @@ class XlaAllReduceOp : public XlaOpKernel {
     // Grab the XLA Builder from context
     xla::XlaBuilder& b = *ctx->builder();
 
+    // Create args
+    std::vector<xla::XlaOp> args;
+    args.push_back(ctx->Input(0));
+    args.push_back(ctx->Input(1));
+    args.push_back(xla::ConstantLiteral(&b, xla::LiteralUtil::CreateR0<int64>(flat_len)));
+
     // Create the custom call
-    std::string opaque = std::to_string(input_shape.dim_size(0)) + "|";
-    xla::XlaOp output = xla::CustomCall(&b, "do_custom_call", {input}, xla::ShapeUtil::MakeShape(output_type, output_shape.dim_sizes()), opaque);
+    std::string opaque = std::to_string(flat_len) + "\0";
+    xla::XlaOp output = xla::CustomCall(&b, "do_custom_call", args, xla::ShapeUtil::MakeShape(output_type, output_shape.dim_sizes()), opaque);
 
     // Convert to the correct type
     // output = xla::ConvertElementType(output, output_type);
