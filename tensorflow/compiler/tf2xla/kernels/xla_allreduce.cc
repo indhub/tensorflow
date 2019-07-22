@@ -61,10 +61,9 @@ void do_custom_call(CUstream stream, void** buffers,
 
     CUDACHECK(cudaMemcpy(output, input, buffer_len * sizeof(float), cudaMemcpyDeviceToDevice));
     */
-    std::cout << "wtf" << std::endl;
     auto ticks = std::chrono::system_clock::now().time_since_epoch().count();
     std::cout << "Time: " << ticks << std::endl;
-    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    //std::this_thread::sleep_for(std::chrono::milliseconds(10));
 }
 
 XLA_REGISTER_CUSTOM_CALL_TARGET(do_custom_call, "CUDA");
@@ -90,10 +89,14 @@ class XlaAllReduceOp : public XlaOpKernel {
     // Output is just one int32 which is an opaque data 
     // that must be handed back to the operator that completes the AllReduce
     TensorShape output_shape;
-    output_shape.AddDim(1);
+    //output_shape.AddDim(1);
+    for (int d = 0; d < input_shape.dims(); ++d) {
+      output_shape.AddDim(input_shape.dim_size(d));
+    }
 
     // Output datatype is int32
-    const DataType dtype = DataType::DT_INT32;
+    const DataType dtype = output_type(0);
+    //const DataType dtype = DataType::DT_INT32;
     xla::PrimitiveType output_type;
     OP_REQUIRES_OK(ctx, DataTypeToPrimitiveType(dtype, &output_type));
 
