@@ -50,11 +50,11 @@ const char* getInt(const char *ptr, int *value) {
 void do_custom_call(CUstream stream, void** buffers,
         const char* opaque, size_t opaque_len) {
 
-    const uint32* var_id = reinterpret_cast<const uint32*>(buffers[1]);
-    const int64 flat_len = reinterpret_cast<const int64*>(buffers[2])[0];
+    const uint32* var_id_gpu = reinterpret_cast<const uint32*>(buffers[1]);
+    const int64 flat_len = (int64) atoi(opaque);
 
     uint32 var_id_cpu;
-    cudaMemcpy(&var_id_cpu, var_id, sizeof(uint32), cudaMemcpyDeviceToHost);
+    cudaMemcpy(&var_id_cpu, var_id_gpu, sizeof(uint32), cudaMemcpyDeviceToHost);
     /*
     // Get ptr to input and output
     const float* input = reinterpret_cast<const float*>(buffers[0]);
@@ -67,7 +67,7 @@ void do_custom_call(CUstream stream, void** buffers,
     CUDACHECK(cudaMemcpy(output, input, buffer_len * sizeof(float), cudaMemcpyDeviceToDevice));
     */
     unsigned long milliseconds_since_epoch = std::chrono::duration_cast<std::chrono::milliseconds> (std::chrono::system_clock::now().time_since_epoch()).count();
-    std::cout << "var_id: " << var_id_cpu << " len: " << opaque << " Time: " << milliseconds_since_epoch << std::endl;
+    std::cout << "var_id: " << var_id_cpu << " len: " << flat_len << " Time: " << milliseconds_since_epoch << std::endl;
 }
 
 XLA_REGISTER_CUSTOM_CALL_TARGET(do_custom_call, "CUDA");
@@ -115,7 +115,6 @@ class XlaAllReduceOp : public XlaOpKernel {
     std::vector<xla::XlaOp> args;
     args.push_back(ctx->Input(0));
     args.push_back(ctx->Input(1));
-    args.push_back(xla::ConstantLiteral(&b, xla::LiteralUtil::CreateR0<int64>(flat_len)));
 
     // Create the custom call
     std::string opaque = std::to_string(flat_len) + "\0";
