@@ -50,11 +50,16 @@ const char* getInt(const char *ptr, int *value) {
 void do_custom_call(CUstream stream, void** buffers,
         const char* opaque, size_t opaque_len) {
 
+    const float* input = reinterpret_cast<const float*>(buffers[0]);
+    float* output = reinterpret_cast<float*>(buffers[2]);
+
     const uint32* var_id_gpu = reinterpret_cast<const uint32*>(buffers[1]);
     const int64 flat_len = (int64) atoi(opaque);
 
     uint32 var_id_cpu;
     cudaMemcpy(&var_id_cpu, var_id_gpu, sizeof(uint32), cudaMemcpyDeviceToHost);
+
+    cudaMemcpy(output, input, flat_len * sizeof(float), cudaMemcpyDeviceToDevice);
     /*
     // Get ptr to input and output
     const float* input = reinterpret_cast<const float*>(buffers[0]);
