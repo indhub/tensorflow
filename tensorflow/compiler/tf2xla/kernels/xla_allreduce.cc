@@ -51,7 +51,8 @@ void do_custom_call(CUstream stream, void** buffers,
         const char* opaque, size_t opaque_len) {
 
     const float* input = reinterpret_cast<const float*>(buffers[0]);
-    float* output = reinterpret_cast<float*>(buffers[2]);
+    const float* buffer = reinterpret_cast<const float*>(buffers[2]);
+    float* output = reinterpret_cast<float*>(buffers[3]);
 
     const uint32* var_id_gpu = reinterpret_cast<const uint32*>(buffers[1]);
     const int64 flat_len = (int64) atoi(opaque);
@@ -120,6 +121,7 @@ class XlaAllReduceOp : public XlaOpKernel {
     std::vector<xla::XlaOp> args;
     args.push_back(ctx->Input(0));
     args.push_back(ctx->Input(1));
+    args.push_back(ctx->Input(2));
 
     // Create the custom call
     std::string opaque = std::to_string(flat_len) + "\0";
