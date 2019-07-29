@@ -19,7 +19,12 @@ public:
 
     Semaphore done;
 
-    BeginAllReduceTask(const uint32_t* var_id_gpu, const void* data_in, void* data_dest, int data_size) {
+    BeginAllReduceTask(const uint32_t* var_id_gpu, const void* data_in, void* data_dest, int data_size)
+        : var_id_gpu(var_id_gpu),
+          data_in(data_in),
+          data_dest(data_dest),
+          data_size(data_size)
+    {
     }
 };
 

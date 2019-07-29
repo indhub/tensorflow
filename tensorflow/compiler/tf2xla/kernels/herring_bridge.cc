@@ -66,19 +66,22 @@ void* HerringBridge::get_result(uint32_t var_id) {
 void HerringBridge::bg_thread() {
     CUDACHECK(cudaSetDevice(0));
     CUDACHECK(cudaStreamCreate(&cudaStream));
-    sem_bg_thread.wait();
+    while(true) {
+        sem_bg_thread.wait();
 
-    auto task = bg_thread_queue.front();
-    cudaMemcpyAsync(&(task->var_id_cpu), task->var_id_gpu, sizeof(uint32_t), cudaMemcpyDeviceToHost, cudaStream);
-    cudaMemcpyAsync(task->data_dest, task->data_in, task->data_size, cudaMemcpyDeviceToDevice, cudaStream);
-    CUDACHECK(cudaStreamSynchronize(cudaStream));
+        auto task = bg_thread_queue.front(); bg_thread_queue.pop();
+        cudaMemcpyAsync(&(task->var_id_cpu), task->var_id_gpu, sizeof(uint32_t), cudaMemcpyDeviceToHost, cudaStream);
+        cudaMemcpyAsync(task->data_dest, task->data_in, task->data_size, cudaMemcpyDeviceToDevice, cudaStream);
+        //CUDACHECK(cudaStreamSynchronize(cudaStream));
 
-    task->done.notify();
+        task->done.notify();
+    }
 }
 
 std::shared_ptr<BeginAllReduceTask> HerringBridge::start_allreduce(const uint32_t* var_id_gpu, const void* data_in, void* data_dst, int data_size) {
     auto task = std::make_shared<BeginAllReduceTask>(var_id_gpu, data_in, data_dst, data_size);
     bg_thread_queue.push(task);
+    sem_bg_thread.notify();
     task->done.wait();
     return task;
 }
