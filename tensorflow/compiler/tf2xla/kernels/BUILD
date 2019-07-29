@@ -115,10 +115,12 @@ tf_kernel_library(
         "xla_self_adjoint_eig_op.cc",
         "xla_svd_op.cc",
         "xla_allreduce.cc",
+        "herring_bridge.cc",
     ],
     hdrs = [
         "index_ops.h",
         "shape_util.h",
+        "herring_bridge.h",
     ],
     tags = ["optonly"],
     deps = [

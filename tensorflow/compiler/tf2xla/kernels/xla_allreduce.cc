@@ -18,6 +18,8 @@
 #include <chrono>
 #include <thread>
 
+#include "herring_bridge.h"
+
 #define CUDACHECK(cmd) do {                         \
   cudaError_t e = cmd;                              \
   if( e != cudaSuccess ) {                          \
@@ -45,6 +47,7 @@ const char* getInt(const char *ptr, int *value) {
     return ptr;
 }
 
+static HerringBridge& hbridge = HerringBridge::getInstance();
 
 // TODO(thangakr): Modify this function to handle types other than FP32
 void do_custom_call(CUstream stream, void** buffers,
@@ -58,22 +61,16 @@ void do_custom_call(CUstream stream, void** buffers,
     const int64 flat_len = (int64) atoi(opaque);
 
     uint32 var_id_cpu;
-    cudaMemcpy(&var_id_cpu, var_id_gpu, sizeof(uint32), cudaMemcpyDeviceToHost);
 
-    cudaMemcpy(output, input, flat_len * sizeof(float), cudaMemcpyDeviceToDevice);
-    /*
-    // Get ptr to input and output
-    const float* input = reinterpret_cast<const float*>(buffers[0]);
-    float* output = reinterpret_cast<float*>(buffers[1]);
+    //cudaMemcpy(&var_id_cpu, var_id_gpu, sizeof(uint32), cudaMemcpyDeviceToHost);
 
-    // Get buffer length
-    int buffer_len = 0;
-    getInt(opaque, &buffer_len);
+    //cudaMemcpy(output, input, flat_len * sizeof(float), cudaMemcpyDeviceToDevice);
 
-    CUDACHECK(cudaMemcpy(output, input, buffer_len * sizeof(float), cudaMemcpyDeviceToDevice));
-    */
-    unsigned long milliseconds_since_epoch = std::chrono::duration_cast<std::chrono::milliseconds> (std::chrono::system_clock::now().time_since_epoch()).count();
+    unsigned long milliseconds_since_epoch = std::chrono::duration_cast<std::chrono::milliseconds> 
+        (std::chrono::system_clock::now().time_since_epoch()).count();
     std::cout << "var_id: " << var_id_cpu << " len: " << flat_len << " Time: " << milliseconds_since_epoch << std::endl;
+
+    hbridge.queue_allreduce(var_id_gpu, flat_len, input);
 }
 
 XLA_REGISTER_CUSTOM_CALL_TARGET(do_custom_call, "CUDA");
