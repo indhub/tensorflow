@@ -121,6 +121,7 @@ tf_kernel_library(
         "index_ops.h",
         "shape_util.h",
         "herring_bridge.h",
+        "semaphore.h",
     ],
     tags = ["optonly"],
     deps = [
