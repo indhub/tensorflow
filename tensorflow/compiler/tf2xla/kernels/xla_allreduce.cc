@@ -54,7 +54,7 @@ void do_custom_call(CUstream stream, void** buffers,
         const char* opaque, size_t opaque_len) {
 
     const float* input = reinterpret_cast<const float*>(buffers[0]);
-    const float* buffer = reinterpret_cast<const float*>(buffers[2]);
+    float* buffer = reinterpret_cast<float*>(buffers[2]);
     float* output = reinterpret_cast<float*>(buffers[3]);
 
     const uint32* var_id_gpu = reinterpret_cast<const uint32*>(buffers[1]);
@@ -70,7 +70,7 @@ void do_custom_call(CUstream stream, void** buffers,
         (std::chrono::system_clock::now().time_since_epoch()).count();
     std::cout << "var_id: " << var_id_cpu << " len: " << flat_len << " Time: " << milliseconds_since_epoch << std::endl;
 
-    hbridge.queue_allreduce(var_id_gpu, flat_len, input);
+    hbridge.queue_allreduce(var_id_gpu, flat_len, input, buffer);
 }
 
 XLA_REGISTER_CUSTOM_CALL_TARGET(do_custom_call, "CUDA");

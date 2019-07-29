@@ -40,7 +40,7 @@ HerringBridge& HerringBridge::getInstance() {
     return instance;
 }
 
-void HerringBridge::queue_allreduce(const uint32_t* var_id_gpu, int len, const void* data) {
+void HerringBridge::queue_allreduce(const uint32_t* var_id_gpu, int len, const void* data, void* buffer) {
     uint32_t var_id_cpu;
     cudaMemcpyAsync(&var_id_cpu, var_id_gpu, sizeof(uint32_t), cudaMemcpyDeviceToHost, cudaStream);
 }
