@@ -9,6 +9,11 @@ public:
     static HerringBridge& getInstance();
     void queue_allreduce(const uint32_t* var_id, int len, const void* data);
     void* get_result(uint32_t var_id);
+private:
+    HerringBridge();
+    ~HerringBridge();
+    HerringBridge(HerringBridge const&);
+    void operator=(HerringBridge const&);
 };
 
 #endif
