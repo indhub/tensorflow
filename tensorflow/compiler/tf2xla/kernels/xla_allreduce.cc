@@ -66,9 +66,9 @@ void do_custom_call(CUstream stream, void** buffers,
 
     //cudaMemcpy(output, input, flat_len * sizeof(float), cudaMemcpyDeviceToDevice);
 
-    unsigned long milliseconds_since_epoch = std::chrono::duration_cast<std::chrono::milliseconds> 
-        (std::chrono::system_clock::now().time_since_epoch()).count();
-    std::cout << "var_id: " << var_id_cpu << " len: " << flat_len << " Time: " << milliseconds_since_epoch << std::endl;
+    //unsigned long milliseconds_since_epoch = std::chrono::duration_cast<std::chrono::milliseconds> 
+    //    (std::chrono::system_clock::now().time_since_epoch()).count();
+    //std::cout << "var_id: " << var_id_cpu << " len: " << flat_len << " Time: " << milliseconds_since_epoch << std::endl;
 
     hbridge.queue_allreduce(var_id_gpu, flat_len, input, buffer);
 }
