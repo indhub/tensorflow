@@ -12,29 +12,46 @@
 
 class BeginAllReduceTask {
 public:
+    int task_type;
     const uint32_t* var_id_gpu;
     uint32_t var_id_cpu;
 
     const void* data_in;
+    const void* buffer;
     void* data_dest;
     int data_size;
 
     Semaphore done;
 
-    BeginAllReduceTask(const uint32_t* var_id_gpu, const void* data_in, void* data_dest, int data_size)
-        : var_id_gpu(var_id_gpu),
+    BeginAllReduceTask(int task_type, const uint32_t* var_id_gpu, const void* data_in, void* data_dest, int data_size)
+        : task_type(task_type),
+          var_id_gpu(var_id_gpu),
           data_in(data_in),
+          buffer(NULL),
           data_dest(data_dest),
           data_size(data_size)
     {
     }
+
+    BeginAllReduceTask(int task_type, const uint32_t* var_id_gpu, const void* buffer, void* data_dest)
+        : task_type(task_type),
+          var_id_gpu(var_id_gpu),
+          buffer(buffer),
+          data_dest(data_dest),
+          data_in(NULL),
+          data_size(NULL)
+    {
+    }
+
+    static const int TYPE_START_AR = 0;
+    static const int TYPE_COPY_RESULT = 1;
 };
 
 class HerringBridge {
 public:
     static HerringBridge& getInstance();
     void queue_allreduce(const uint32_t* var_id, int len, const void* data, void* buffer);
-    void copy_allreduced_data(const uint32_t* var_id, void* dest);
+    void copy_allreduced_data(const uint32_t* var_id, const void* buffer, void* dest);
 private:
     HerringBridge();
     ~HerringBridge();
@@ -50,6 +67,7 @@ private:
 
     // AR segments
     std::map<int, int> offsets;
+    std::map<int, int> var_length;
     std::map<int, int> segment_index;
     std::map<int, int> segment_var_count;
     std::map<int, int> segment_recv_count;
