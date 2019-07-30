@@ -3,6 +3,8 @@
 #include <thread>
 #include <chrono>
 #include <iostream>
+#include <fstream>
+#include <string>
 
 #include "herring_bridge.h"
 
@@ -22,7 +24,7 @@ static cudaStream_t cudaStream;
 
 HerringBridge::HerringBridge() {
     // Get local rank
-    const char* value = std::getenv("OMPI_COMM_WORLD_LOCAL_RANK");
+    char* value = std::getenv("OMPI_COMM_WORLD_LOCAL_RANK");
     int localRank;
     if(value == NULL) {
         std::cerr << "OMPI_COMM_WORLD_LOCAL_RANK not available" << std::endl;
@@ -34,6 +36,42 @@ HerringBridge::HerringBridge() {
     // Spin the background thread that does CUDA operations
     std::thread thread(&HerringBridge::bg_thread, this);
     thread.detach();
+    
+    // AllReduce Segments
+    value = std::getenv("AR_SEGMENTS");
+    if(value == NULL) {
+        value = "arsegments.csv";
+    }
+    std::ifstream arfile(value);
+
+    std::string line;
+    int cur_seg_index = 0, cur_offset = 0;
+    while(std::getline(arfile, line, ',')) {
+        // Get var_id
+        int var_id = std::stoi(line);
+        // Get length
+        std::getline(arfile, line);
+        int len = std::stoi(line);
+        
+        if(var_id == -1) {
+            // End of segment
+            cur_seg_index++;
+        } else {
+            // record offset
+            offsets[var_id] = cur_offset;
+            cur_offset += len * sizeof(float);
+            
+            // record segment index of this gradient
+            segment_index[var_id] = cur_seg_index;
+            
+            // How many variables are there in this segment
+            segment_var_count[cur_seg_index]++;
+        }
+    }
+    
+    for(auto elem: offsets) {
+        std::cout << elem.first << ", " << elem.second << std::endl;
+    }
 }
 
 HerringBridge::~HerringBridge() {
@@ -59,8 +97,7 @@ void HerringBridge::queue_allreduce(const uint32_t* var_id_gpu, int len, const v
     // After we know where this data goes
 }
 
-void* HerringBridge::get_result(uint32_t var_id) {
-    return NULL;
+void HerringBridge::copy_allreduced_data(const uint32_t* var_id, void* dest) {
 }
 
 void HerringBridge::bg_thread() {
@@ -71,8 +108,9 @@ void HerringBridge::bg_thread() {
 
         auto task = bg_thread_queue.front(); bg_thread_queue.pop();
         cudaMemcpyAsync(&(task->var_id_cpu), task->var_id_gpu, sizeof(uint32_t), cudaMemcpyDeviceToHost, cudaStream);
-        cudaMemcpyAsync(task->data_dest, task->data_in, task->data_size, cudaMemcpyDeviceToDevice, cudaStream);
-        //CUDACHECK(cudaStreamSynchronize(cudaStream));
+        CUDACHECK(cudaStreamSynchronize(cudaStream));
+
+        cudaMemcpyAsync((char*)task->data_dest + offsets[task->var_id_cpu], task->data_in, task->data_size, cudaMemcpyDeviceToDevice, cudaStream);
 
         task->done.notify();
     }
