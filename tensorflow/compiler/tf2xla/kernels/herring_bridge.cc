@@ -27,7 +27,6 @@ HerringBridge::HerringBridge() {
     char* value = std::getenv("OMPI_COMM_WORLD_LOCAL_RANK");
     int localRank;
     if(value == NULL) {
-        std::cerr << "OMPI_COMM_WORLD_LOCAL_RANK not available" << std::endl;
         localRank = 0;
     } else {
         localRank = std::atoi(value);
@@ -69,10 +68,6 @@ HerringBridge::HerringBridge() {
             segment_var_count[cur_seg_index]++;
         }
     }
-    
-    for(auto elem: offsets) {
-        std::cout << elem.first << ", " << elem.second << std::endl;
-    }
 }
 
 HerringBridge::~HerringBridge() {
@@ -97,6 +92,7 @@ void HerringBridge::queue_allreduce(const uint32_t* var_id_gpu, int len, const v
 
     // After we know where this data goes
 }
+
 
 void HerringBridge::copy_allreduced_data(const uint32_t* var_id, const void* buffer, void* dest) {
     auto task = std::make_shared<BeginAllReduceTask>(BeginAllReduceTask::TYPE_COPY_RESULT, var_id, buffer, dest);
