@@ -74,5 +74,8 @@ private:
     std::mutex mtx_ar_segments;
 };
 
+HerringBridge& getHerringBridge() {
+    return HerringBridge::getInstance();
+}
 
 #endif

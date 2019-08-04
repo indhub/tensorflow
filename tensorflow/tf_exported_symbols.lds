@@ -5,3 +5,4 @@
 *TFE_*
 *nsync_*
 *stream_executor*
+*Herring*
