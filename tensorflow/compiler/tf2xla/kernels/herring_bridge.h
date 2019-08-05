@@ -60,11 +60,13 @@ private:
             const void* data_in, void* data_buffer, void* data_output);
 
     // AR segments
-    std::map<int, int> offsets;
-    std::map<int, int> var_length;
-    std::map<int, int> segment_index;
-    std::map<int, int> segment_var_count;
-    std::map<int, int> segment_recv_count;
+    std::map<int, int> offsets; // Offset of a given variable in buffer
+    std::map<int, int> var_length; // Length of a given variable
+    std::map<int, int> segment_index; // Segment index of a given variable
+    std::map<int, int> segment_var_count; // Number of variables in a given segment
+    std::map<int, int> segment_recv_count; // Number of variables received in this iteration for a given segment
+    std::map<int, int> segment_offset; // Offset of a given segment in buffer
+    std::map<int, int> segment_length; // Length of a given segment in buffer
     std::mutex mtx_ar_segments;
 };
 

@@ -46,6 +46,10 @@ HerringBridge::HerringBridge() {
 
     std::string line;
     int cur_seg_index = 0, cur_offset = 0;
+    int cur_segment_length = 0;
+
+    segment_offset[cur_seg_index] = cur_offset;
+    
     while(std::getline(arfile, line, ',')) {
         // Get var_id
         int var_id = std::stoi(line);
@@ -54,8 +58,12 @@ HerringBridge::HerringBridge() {
         int len = std::stoi(line);
         
         if(var_id == -1) {
-            // End of segment
+            // End of segment; set segment length
+            segment_length[cur_seg_index] = cur_segment_length;
+            cur_segment_length = 0;
+            // Start tracking next segment
             cur_seg_index++;
+            segment_offset[cur_seg_index] = cur_offset;
         } else {
             // record offset
             offsets[var_id] = cur_offset;
@@ -67,6 +75,9 @@ HerringBridge::HerringBridge() {
             
             // How many variables are there in this segment
             segment_var_count[cur_seg_index]++;
+
+            // Increment segment length
+            cur_segment_length += len;
         }
     }
 }
