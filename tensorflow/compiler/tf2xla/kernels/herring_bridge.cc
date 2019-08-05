@@ -78,12 +78,12 @@ HerringBridge& HerringBridge::getInstance() {
     return instance;
 }
 
-void HerringBridge::queue_allreduce(const uint32_t* var_id_gpu, int len, const void* data, void* buffer) {
+void HerringBridge::queue_allreduce(const uint32_t* var_id_gpu, int len, const void* data, void* buffer, void* output) {
 
     unsigned long milliseconds_since_epoch = std::chrono::duration_cast<std::chrono::milliseconds>
         (std::chrono::system_clock::now().time_since_epoch()).count();
 
-    auto task = start_allreduce(var_id_gpu, data, buffer, len);
+    auto task = start_allreduce(var_id_gpu, len, data, buffer, output);
 
     //std::cout << "var_id: " << task->var_id_cpu << " len: " << len << " Time: " << milliseconds_since_epoch << std::endl;
     // First iteration - temporarily store in CPU memory
@@ -94,8 +94,9 @@ void HerringBridge::queue_allreduce(const uint32_t* var_id_gpu, int len, const v
 }
 
 
-void HerringBridge::copy_allreduced_data(const uint32_t* var_id, const void* buffer, void* dest) {
-    auto task = std::make_shared<BeginAllReduceTask>(BeginAllReduceTask::TYPE_COPY_RESULT, var_id, buffer, dest);
+void HerringBridge::copy_allreduced_data(const uint32_t* var_id, const void* data_in, void* buffer, void* dest) {
+    auto task = std::make_shared<PartialAllReduceTask>(PartialAllReduceTask::TYPE_COPY_RESULT, var_id, 0, 
+                                                       data_in, buffer, dest);
     bg_thread_queue.push(task);
     sem_bg_thread.notify();
     task->done.wait();
@@ -109,16 +110,23 @@ void HerringBridge::bg_thread() {
 
         auto task = bg_thread_queue.front(); bg_thread_queue.pop();
         switch(task->task_type) {
-        case BeginAllReduceTask::TYPE_START_AR:
+        case PartialAllReduceTask::TYPE_START_AR:
             cudaMemcpyAsync(&(task->var_id_cpu), task->var_id_gpu, sizeof(uint32_t), cudaMemcpyDeviceToHost, cudaStream);
             CUDACHECK(cudaStreamSynchronize(cudaStream));
-
-            cudaMemcpyAsync((char*)task->data_dest + offsets[task->var_id_cpu], task->data_in, task->data_size, cudaMemcpyDeviceToDevice, cudaStream);
+            
+            std::cout << "var: " << task->var_id_cpu << " size:" << task->data_size << std::endl;
+            cudaMemcpyAsync((char*)task->buffer + offsets[task->var_id_cpu], task->data_in, task->data_size, cudaMemcpyDeviceToDevice, cudaStream);
+            //cudaMemcpyAsync((char*)task->data_out, (char*)task->data_in, task->data_size, cudaMemcpyDeviceToDevice, cudaStream);
+            CUDACHECK(cudaStreamSynchronize(cudaStream));
+            std::cout << "copy done" << std::endl;
             break;
-        case BeginAllReduceTask::TYPE_COPY_RESULT:
+        case PartialAllReduceTask::TYPE_COPY_RESULT:
             cudaMemcpyAsync(&(task->var_id_cpu), task->var_id_gpu, sizeof(uint32_t), cudaMemcpyDeviceToHost, cudaStream);
-            cudaMemcpyAsync(task->data_dest, (char*)task->buffer + offsets[task->var_id_cpu], 
+            CUDACHECK(cudaStreamSynchronize(cudaStream));
+            //std::cout << "var " << task->var_id_cpu << " from offset " << offsets[task->var_id_cpu] << std::endl;
+            cudaMemcpyAsync(task->data_out, (char*)task->buffer + offsets[task->var_id_cpu], 
                     var_length[task->var_id_cpu] * sizeof(float), cudaMemcpyDeviceToDevice, cudaStream);
+            //cudaMemcpyAsync((char*)task->data_out, (char*)task->data_in, var_length[task->var_id_cpu] * sizeof(float), cudaMemcpyDeviceToHost, cudaStream);
             CUDACHECK(cudaStreamSynchronize(cudaStream));
             break;
         }
@@ -126,8 +134,10 @@ void HerringBridge::bg_thread() {
     }
 }
 
-std::shared_ptr<BeginAllReduceTask> HerringBridge::start_allreduce(const uint32_t* var_id_gpu, const void* data_in, void* data_dst, int data_size) {
-    auto task = std::make_shared<BeginAllReduceTask>(BeginAllReduceTask::TYPE_START_AR, var_id_gpu, data_in, data_dst, data_size);
+std::shared_ptr<PartialAllReduceTask> HerringBridge::start_allreduce(const uint32_t* var_id_gpu, int data_len, 
+        const void* data_in, void* data_buffer, void* data_out) {
+    auto task = std::make_shared<PartialAllReduceTask>(PartialAllReduceTask::TYPE_START_AR, var_id_gpu, data_len * sizeof(float), 
+                                                       data_in, data_buffer, data_out);
     bg_thread_queue.push(task);
     sem_bg_thread.notify();
     task->done.wait();

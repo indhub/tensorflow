@@ -60,7 +60,7 @@ void do_custom_call(CUstream stream, void** buffers,
     const uint32* var_id_gpu = reinterpret_cast<const uint32*>(buffers[1]);
     const int64 flat_len = (int64) atoi(opaque);
 
-    hbridge.queue_allreduce(var_id_gpu, flat_len, input, buffer);
+    hbridge.queue_allreduce(var_id_gpu, flat_len, input, buffer, output);
 }
 
 XLA_REGISTER_CUSTOM_CALL_TARGET(do_custom_call, "CUDA");
