@@ -122,6 +122,8 @@ tf_kernel_library(
         "shape_util.h",
         "herring_bridge.h",
         "semaphore.h",
+        "efa/include/mpi.h",
+        "efa/include/mpi_portable_platform.h",
     ],
     tags = ["optonly"],
     deps = [
@@ -198,6 +200,7 @@ tf_kernel_library(
         "//tensorflow/core/kernels:stateful_random_ops",
         "//tensorflow/core/kernels:training_ops",
         "//tensorflow/compiler/xla/service:custom_call_target_registry",
+        "//third_party/mpi",
         "@com_google_absl//absl/algorithm:container",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/types:optional",

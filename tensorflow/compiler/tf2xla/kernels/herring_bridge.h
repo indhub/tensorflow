@@ -68,6 +68,8 @@ private:
     std::map<int, int> segment_offset; // Offset of a given segment in buffer
     std::map<int, int> segment_length; // Length of a given segment in buffer
     std::mutex mtx_ar_segments;
+
+    int myRank, nRanks, localRank;
 };
 
 HerringBridge& getHerringBridge() {
