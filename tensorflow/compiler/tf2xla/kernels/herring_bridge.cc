@@ -5,6 +5,7 @@
 #include <iostream>
 #include <fstream>
 #include <string>
+#include <vector>
 
 #include "herring_bridge.h"
 
@@ -102,6 +103,20 @@ void HerringBridge::copy_allreduced_data(const uint32_t* var_id, const void* dat
     task->done.wait();
 }
 
+void print_some_floats(const void* data, int count) {
+    std::vector<float> vect;
+    vect.resize(count);
+    float* ptr = &vect[0];
+
+    cudaMemcpy(ptr, data, count * sizeof(float), cudaMemcpyDeviceToHost);
+    
+    std::cout << "[";
+    for(int i=0; i<count; i++) {
+        std::cout << ptr[i] << " ";
+    }
+    std::cout << "]" << std::endl;
+}
+
 void HerringBridge::bg_thread() {
     CUDACHECK(cudaSetDevice(0));
     CUDACHECK(cudaStreamCreate(&cudaStream));
@@ -111,23 +126,13 @@ void HerringBridge::bg_thread() {
         auto task = bg_thread_queue.front(); bg_thread_queue.pop();
         switch(task->task_type) {
         case PartialAllReduceTask::TYPE_START_AR:
-            cudaMemcpyAsync(&(task->var_id_cpu), task->var_id_gpu, sizeof(uint32_t), cudaMemcpyDeviceToHost, cudaStream);
-            CUDACHECK(cudaStreamSynchronize(cudaStream));
-            
-            std::cout << "var: " << task->var_id_cpu << " size:" << task->data_size << std::endl;
-            cudaMemcpyAsync((char*)task->buffer + offsets[task->var_id_cpu], task->data_in, task->data_size, cudaMemcpyDeviceToDevice, cudaStream);
-            //cudaMemcpyAsync((char*)task->data_out, (char*)task->data_in, task->data_size, cudaMemcpyDeviceToDevice, cudaStream);
-            CUDACHECK(cudaStreamSynchronize(cudaStream));
-            std::cout << "copy done" << std::endl;
+            cudaMemcpy(&(task->var_id_cpu), task->var_id_gpu, sizeof(uint32_t), cudaMemcpyDeviceToHost);
+            cudaMemcpy((char*)task->buffer + offsets[task->var_id_cpu], task->data_in, task->data_size, cudaMemcpyDeviceToDevice);
             break;
         case PartialAllReduceTask::TYPE_COPY_RESULT:
-            cudaMemcpyAsync(&(task->var_id_cpu), task->var_id_gpu, sizeof(uint32_t), cudaMemcpyDeviceToHost, cudaStream);
-            CUDACHECK(cudaStreamSynchronize(cudaStream));
-            //std::cout << "var " << task->var_id_cpu << " from offset " << offsets[task->var_id_cpu] << std::endl;
-            cudaMemcpyAsync(task->data_out, (char*)task->buffer + offsets[task->var_id_cpu], 
-                    var_length[task->var_id_cpu] * sizeof(float), cudaMemcpyDeviceToDevice, cudaStream);
-            //cudaMemcpyAsync((char*)task->data_out, (char*)task->data_in, var_length[task->var_id_cpu] * sizeof(float), cudaMemcpyDeviceToHost, cudaStream);
-            CUDACHECK(cudaStreamSynchronize(cudaStream));
+            cudaMemcpy(&(task->var_id_cpu), task->var_id_gpu, sizeof(uint32_t), cudaMemcpyDeviceToHost);
+            cudaMemcpy(task->data_out, (char*)task->buffer + offsets[task->var_id_cpu], 
+                    var_length[task->var_id_cpu] * sizeof(float), cudaMemcpyDeviceToDevice);
             break;
         }
         task->done.notify();
