@@ -121,6 +121,7 @@ tf_kernel_library(
         "index_ops.h",
         "shape_util.h",
         "herring_bridge.h",
+        "herring_bridge_internal.h",
         "semaphore.h",
         "efa/include/mpi.h",
         "efa/include/mpi_portable_platform.h",

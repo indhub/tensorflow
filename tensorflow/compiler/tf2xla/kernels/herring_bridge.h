@@ -6,9 +6,13 @@
 #include <memory>
 #include <queue>
 #include <map>
+#include <unordered_map>
 #include <mutex>
+#include <condition_variable>
+#include <functional>
 
 #include "semaphore.h"
+#include "herring_bridge_internal.h"
 
 class PartialAllReduceTask {
 public:
@@ -22,8 +26,21 @@ public:
     int data_size;
 
     Semaphore done;
+    std::function<void()> asyncDoneCallback;
 
     PartialAllReduceTask(int task_type, const uint32_t* var_id_gpu, int data_size, 
+                       const void* data_in, void* buffer, void* data_out, std::function<void()> asyncDoneCallback)
+        : task_type(task_type),
+          var_id_gpu(var_id_gpu),
+          data_size(data_size),
+          data_in(data_in),
+          buffer(buffer),
+          data_out(data_out),
+          asyncDoneCallback(asyncDoneCallback)
+    {
+    }
+
+    PartialAllReduceTask(int task_type, const uint32_t* var_id_gpu, int data_size,
                        const void* data_in, void* buffer, void* data_out)
         : task_type(task_type),
           var_id_gpu(var_id_gpu),
@@ -44,7 +61,7 @@ public:
     void queue_allreduce(const uint32_t* var_id, int len, 
                          const void* data_in, void* buffer, void* data_out);
     void copy_allreduced_data(const uint32_t* var_id, 
-                              const void* data_in, void* buffer, void* data_out);
+                         const void* data_in, void* buffer, void* data_out, std::function<void()> done);
 private:
     HerringBridge();
     ~HerringBridge();
@@ -68,6 +85,19 @@ private:
     std::map<int, int> segment_offset; // Offset of a given segment in buffer
     std::map<int, int> segment_length; // Length of a given segment in buffer
     std::mutex mtx_ar_segments;
+    
+    // Synchronization for finish_allreduce
+    std::mutex mtx_finish_allreduce;
+    // Queue for when finisher comes first. Finisher will queue the var id, dest address
+    // and done callback. allreduce handler can copy data and call the callbacks.
+    std::unordered_map<int, std::queue<std::shared_ptr<PartialAllReduceTask>>> gradsAwaitingAllreduce;
+    // How many grads are immediately available (allready allreduced) for this segment
+    std::unordered_map<int, int> num_grads_available_for_segment;
+    Semaphore sem_allreduce_event_available;
+    std::queue<std::shared_ptr<CudaEvent>> queueAllReduceEvents;
+    std::queue<int> queueAllReduceSegmentIds;
+    void allreduce_event_handler();
+
 
     int myRank, nRanks, localRank;
 };
