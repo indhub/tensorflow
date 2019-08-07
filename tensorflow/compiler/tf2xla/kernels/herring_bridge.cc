@@ -47,14 +47,17 @@ static ncclComm_t ncclComm;
 
 HerringBridge::HerringBridge() {
     // Get local rank
+    MPICHECK(MPI_Init(NULL, NULL));
+    MPICHECK(MPI_Comm_rank(MPI_COMM_WORLD, &myRank));
+    MPICHECK(MPI_Comm_size(MPI_COMM_WORLD, &nRanks));
+
     char* value = std::getenv("OMPI_COMM_WORLD_LOCAL_RANK");
-    int localRank;
     if(value == NULL) {
         localRank = 0;
     } else {
         localRank = std::atoi(value);
     }
-    
+
     // Spin the background thread that does CUDA operations
     std::thread cuda_thread(&HerringBridge::bg_thread, this);
     cuda_thread.detach();
@@ -122,13 +125,6 @@ void HerringBridge::queue_allreduce(const uint32_t* var_id_gpu, int len, const v
         (std::chrono::system_clock::now().time_since_epoch()).count();
 
     auto task = start_allreduce(var_id_gpu, len, data, buffer, output);
-
-    //std::cout << "var_id: " << task->var_id_cpu << " len: " << len << " Time: " << milliseconds_since_epoch << std::endl;
-    // First iteration - temporarily store in CPU memory
-
-    // Beginning of second iteration - figure out where this data goes
-
-    // After we know where this data goes
 }
 
 
@@ -142,6 +138,7 @@ void HerringBridge::copy_allreduced_data(const uint32_t* var_id,
 }
 
 void HerringBridge::allreduce_event_handler() {
+    CUDACHECK(cudaSetDevice(localRank));
     while(true) {
         sem_allreduce_event_available.wait(); // Wait for the next ncclAllReduce call to be issued
         auto event = queueAllReduceEvents.front(); queueAllReduceEvents.pop(); // Grab the cuda event
@@ -187,17 +184,6 @@ void print_some_floats(const void* data, int count) {
 }
 
 void HerringBridge::bg_thread() {
-
-    MPICHECK(MPI_Init(NULL, NULL));
-    MPICHECK(MPI_Comm_rank(MPI_COMM_WORLD, &myRank));
-    MPICHECK(MPI_Comm_size(MPI_COMM_WORLD, &nRanks));
-
-    const char* value = std::getenv("OMPI_COMM_WORLD_LOCAL_RANK");
-    if(value == NULL) {
-        localRank = 0;
-    } else {
-        localRank = std::atoi(value);
-    }
 
     ncclUniqueId ncclId;
     if (myRank == 0) ncclGetUniqueId(&ncclId);

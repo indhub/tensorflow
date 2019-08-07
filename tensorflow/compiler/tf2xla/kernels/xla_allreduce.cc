@@ -32,21 +32,6 @@
 namespace tensorflow {
 namespace {
 
-const char* getInt(const char *ptr, int *value) {
-    
-    // Get the first digit
-    *value = *ptr - '0';
-    ptr++;
-
-    // Get subsequent digits until delimiter
-    while(*ptr != '|') {
-        *value = *value * 10 + (*ptr - '0');
-    }
-    ptr++; // Move pointer to the character after delimited
-
-    return ptr;
-}
-
 static HerringBridge& hbridge = HerringBridge::getInstance();
 
 // TODO(thangakr): Modify this function to handle types other than FP32
