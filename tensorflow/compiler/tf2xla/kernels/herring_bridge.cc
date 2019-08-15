@@ -144,17 +144,14 @@ void HerringBridge::allreduce_event_handler() {
         auto event = queueAllReduceEvents.front(); queueAllReduceEvents.pop(); // Grab the cuda event
         int segmentId = queueAllReduceSegmentIds.front(); queueAllReduceSegmentIds.pop(); // Grab the segment ID
         cudaEventSynchronize(*event); // Wait for the AllReduce call to complete
-
         {
             // pick the lock so that we don't race with finisher
             std::lock_guard<std::mutex> guard(mtx_finish_allreduce);
             // How many gradient tensors did we just AllReduce?
             int num_grads_available = segment_var_count[segmentId];
-            // Grab the waiting tasks from finisher corresponding to this segment ID
-            auto queue_tasks = gradsAwaitingAllreduce[segmentId];
-            // Iterate through the tasks
-            while(!queue_tasks.empty()) {
-                auto task = queue_tasks.front(); queue_tasks.pop();
+            // Iterate through the tasks waiting from finisher corresponding to this segment ID
+            while(!gradsAwaitingAllreduce[segmentId].empty()) {
+                auto task = gradsAwaitingAllreduce[segmentId].front(); gradsAwaitingAllreduce[segmentId].pop();
                 // Copy gradient
                 cudaMemcpy(task->data_out, (char*)task->buffer + offsets[task->var_id_cpu],
                         var_length[task->var_id_cpu] * sizeof(float), cudaMemcpyDeviceToDevice);
