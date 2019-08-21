@@ -120,10 +120,8 @@ HerringBridge& HerringBridge::getInstance() {
 }
 
 void HerringBridge::queue_allreduce(const uint32_t* var_id_gpu, int len, const void* data, void* buffer, void* output) {
-
     unsigned long milliseconds_since_epoch = std::chrono::duration_cast<std::chrono::milliseconds>
         (std::chrono::system_clock::now().time_since_epoch()).count();
-
     auto task = start_allreduce(var_id_gpu, len, data, buffer, output);
 }
 
@@ -133,7 +131,10 @@ void HerringBridge::copy_allreduced_data(const uint32_t* var_id,
     // Do CUDA operations from a seperate thread. Just wrap everything and send it to 
     auto task = std::make_shared<PartialAllReduceTask>(PartialAllReduceTask::TYPE_COPY_RESULT, var_id, 0, 
                                                        data_in, buffer, dest, asyncDoneCallback);
-    bg_thread_queue.push(task);
+    {
+        std::lock_guard<std::mutex> mtx(mtx_bg_thread);
+        bg_thread_queue.push(task);
+    }
     sem_bg_thread.notify();
 }
 
@@ -194,12 +195,15 @@ void HerringBridge::bg_thread() {
     int segment_id;
     while(true) {
         sem_bg_thread.wait();
-
         auto task = bg_thread_queue.front(); bg_thread_queue.pop();
+        //unsigned long milliseconds_since_epoch;
         switch(task->task_type) {
         case PartialAllReduceTask::TYPE_START_AR:
             // Copy the gradients to a temporary buffer and return immediately
             cudaMemcpy(&(task->var_id_cpu), task->var_id_gpu, sizeof(uint32_t), cudaMemcpyDeviceToHost);
+            //milliseconds_since_epoch = std::chrono::duration_cast<std::chrono::milliseconds>
+            //    (std::chrono::system_clock::now().time_since_epoch()).count();
+            //std::cout << "timelog," << milliseconds_since_epoch << "," << task->var_id_cpu << std::endl;
             cudaMemcpy((char*)task->buffer + offsets[task->var_id_cpu], task->data_in, 
                     task->data_size, cudaMemcpyDeviceToDevice);
 
@@ -268,7 +272,10 @@ std::shared_ptr<PartialAllReduceTask> HerringBridge::start_allreduce(const uint3
         const void* data_in, void* data_buffer, void* data_out) {
     auto task = std::make_shared<PartialAllReduceTask>(PartialAllReduceTask::TYPE_START_AR, 
             var_id_gpu, data_len * sizeof(float), data_in, data_buffer, data_out);
-    bg_thread_queue.push(task);
+    {
+        std::lock_guard<std::mutex> guard(mtx_bg_thread);
+        bg_thread_queue.push(task);
+    }
     sem_bg_thread.notify();
     task->done.wait();
     return task;

@@ -70,6 +70,7 @@ private:
 
     void bg_thread();
 
+    std::mutex mtx_bg_thread;
     Semaphore sem_bg_thread;
     std::queue<std::shared_ptr<PartialAllReduceTask> > bg_thread_queue;
 
