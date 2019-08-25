@@ -1,0 +1,100 @@
+#include "tensorflow/compiler/tf2xla/type_util.h"
+#include "tensorflow/compiler/tf2xla/xla_op_kernel.h"
+#include "tensorflow/compiler/tf2xla/xla_op_registry.h"
+#include "tensorflow/compiler/xla/client/lib/arithmetic.h"
+#include "tensorflow/compiler/xla/literal_util.h"
+#include "tensorflow/core/framework/bounds_check.h"
+#include "tensorflow/core/framework/kernel_def_builder.h"
+#include "tensorflow/core/framework/op_kernel.h"
+#include "tensorflow/core/framework/register_types.h"
+#include "tensorflow/core/framework/tensor.h"
+#include "tensorflow/core/framework/tensor_shape.h"
+
+#include "tensorflow/compiler/xla/service/custom_call_target_registry.h"
+
+#include <cuda.h>
+#include <cuda_runtime.h>
+
+#include <chrono>
+#include <thread>
+
+#include "herring_bridge.h"
+
+#define CUDACHECK(cmd) do {                         \
+  cudaError_t e = cmd;                              \
+  if( e != cudaSuccess ) {                          \
+    printf("Failed: Cuda error %s:%d '%s'\n",       \
+        __FILE__,__LINE__,cudaGetErrorString(e));   \
+    exit(EXIT_FAILURE);                             \
+  }                                                 \
+} while(0)
+
+namespace tensorflow {
+namespace {
+
+static HerringBridge& hbridge = HerringBridge::getInstance();
+
+void do_custom_call(CUstream stream, void** buffers,
+        const char* opaque, size_t opaque_len) {
+
+    const float* input = reinterpret_cast<const float*>(buffers[0]);
+    float* buffer = reinterpret_cast<float*>(buffers[2]);
+    float* output = reinterpret_cast<float*>(buffers[3]);
+
+}
+
+XLA_REGISTER_CUSTOM_CALL_TARGET(do_custom_call, "CUDA");
+
+class XlaAllReduceOp : public XlaOpKernel {
+ public:
+  explicit XlaAllReduceOp(OpKernelConstruction* ctx) : XlaOpKernel(ctx) {}
+
+  void Compile(XlaOpKernelContext* ctx) override {
+
+    // Get input and input shape from context
+    xla::XlaOp input = ctx->Input(0);
+    const TensorShape input_shape = ctx->InputShape(0);
+   
+    TensorShape output_shape;
+    int64 flat_len = 1;
+    for (int d = 0; d < input_shape.dims(); ++d) {
+      int64 dim_size = input_shape.dim_size(d);
+      output_shape.AddDim(dim_size);
+      
+      flat_len *= dim_size;
+    } 
+    
+    const DataType dtype = output_type(0);
+    xla::PrimitiveType output_type;
+    OP_REQUIRES_OK(ctx, DataTypeToPrimitiveType(dtype, &output_type));
+    
+    // Grab the XLA Builder from context
+    xla::XlaBuilder& b = *ctx->builder();
+    
+    // Create args
+    std::vector<xla::XlaOp> args;
+    args.push_back(ctx->Input(0));
+    args.push_back(ctx->Input(1));
+    args.push_back(ctx->Input(2));
+    
+    // Create the custom call
+    std::string opaque = std::to_string(flat_len) + "\0";
+    xla::XlaOp output = xla::CustomCall(&b, "do_custom_call", args, xla::ShapeUtil::MakeShape(output_type, output_shape.dim_sizes()), opaque);
+    
+    // Convert to the correct type
+    // output = xla::ConvertElementType(output, output_type);
+    
+    // Set output
+    ctx->SetOutput(0, output);
+  } 
+  
+ private:
+  TF_DISALLOW_COPY_AND_ASSIGN(XlaAllReduceOp);
+};
+
+REGISTER_XLA_OP(Name("XlaAllReduce"), XlaAllReduceOp);
+
+
+}  // namespace
+}  // namespace tensorflow
+                             
