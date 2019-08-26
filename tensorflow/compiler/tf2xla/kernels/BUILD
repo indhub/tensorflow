@@ -121,6 +121,7 @@ tf_kernel_library(
         "index_ops.h",
         "shape_util.h",
         "herring_bridge.h",
+        "semaphore.h",
         "nccl.h",
         "nccl_net.h",
         "mpi/include/mpi.h",

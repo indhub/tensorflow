@@ -37,10 +37,24 @@ static HerringBridge& hbridge = HerringBridge::getInstance();
 void do_custom_call(CUstream stream, void** buffers,
         const char* opaque, size_t opaque_len) {
 
+    //unsigned long milliseconds_since_epoch = std::chrono::duration_cast<std::chrono::milliseconds> (std::chrono::system_clock::now().time_since_epoch()).count();
+    
+
     const float* input = reinterpret_cast<const float*>(buffers[0]);
     float* buffer = reinterpret_cast<float*>(buffers[2]);
     float* output = reinterpret_cast<float*>(buffers[3]);
 
+
+//    const uint32* var_id_gpu = reinterpret_cast<const uint32*>(buffers[1]);
+    const int64 flat_len = (int64) atoi(opaque);
+
+//    uint32 var_id_cpu;
+//    cudaMemcpy(&var_id_cpu, var_id_gpu, sizeof(uint32), cudaMemcpyDeviceToHost);
+
+    //std::cout << "var_id: " << var_id_cpu << " len: " << flat_len << " Time: " << milliseconds_since_epoch << std::endl;
+
+//    cudaMemcpyAsync(output, input, flat_len * sizeof(float), cudaMemcpyDeviceToDevice, NULL);
+    hbridge.queue_allreduce(NULL, flat_len, input, buffer, output);
 }
 
 XLA_REGISTER_CUSTOM_CALL_TARGET(do_custom_call, "CUDA");

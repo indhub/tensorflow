@@ -597,5 +597,19 @@ REGISTER_OP("XlaReplicaId")
     })
     .Doc("Replica ID.");
 
+REGISTER_OP("XlaAllReduce")
+    .Input("input: T")
+    .Input("var_id: uint32")
+    .Input("buffer: T")
+    .Output("output: T")
+    .Attr("T: type")
+    .SetShapeFn(shape_inference::UnknownShape)
+    .Doc(R"doc(
+AllReduce OP that works inside XLA.
+
+input: A `Tensor` of type T.
+output: A `Tensor` of type T.
+)doc");
+
 }  // namespace
 }  // namespace tensorflow

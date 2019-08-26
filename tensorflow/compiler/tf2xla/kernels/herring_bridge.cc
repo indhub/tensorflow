@@ -40,7 +40,30 @@
   }                                                 \
 } while(0)
 
+static cudaStream_t cudaStream;
+
 HerringBridge::HerringBridge() {
+  // Spin the background thread that does CUDA operations
+  std::thread cuda_thread(&HerringBridge::bg_thread, this);
+  cuda_thread.detach();
+
+}
+
+void HerringBridge::bg_thread() {
+  CUDACHECK(cudaSetDevice(0));
+  CUDACHECK(cudaStreamCreateWithFlags(&cudaStream, cudaStreamNonBlocking));
+
+  while(true) {
+    sem_bg_thread.wait();
+    auto task = bg_thread_queue.front(); bg_thread_queue.pop();
+
+    switch(task->task_type) {
+      case PartialAllReduceTask::TYPE_START_AR:
+        cudaMemcpyAsync(task->data_out, task->data_in, task->data_size, cudaMemcpyDeviceToDevice, cudaStream);
+        break;
+    }
+  }
+
 }
 
 HerringBridge::~HerringBridge() {
@@ -52,9 +75,25 @@ HerringBridge& HerringBridge::getInstance() {
 }
 
 void HerringBridge::queue_allreduce(const uint32_t* var_id_gpu, int len, const void* data, void* buffer, void* output) {
+  auto task = start_allreduce(var_id_gpu, len, data, buffer, output);
 }
 
-void HerringBridge::copy_allreduced_data(const uint32_t* var_id,
-        const void* data_in, void* buffer, void* dest, std::function<void()> asyncDoneCallback) {
+void HerringBridge::copy_allreduced_data(const uint32_t* var_id, const void* orig_grad, const void* data_in,
+                                         void* buffer, void* dest, std::function<void()> asyncDoneCallback) {
+  // Just copy from orig_grad to dest
+
+}
+
+std::shared_ptr<PartialAllReduceTask> HerringBridge::start_allreduce(const uint32_t* var_id_gpu, int data_len,
+        const void* data_in, void* data_buffer, void* data_out) {
+    auto task = std::make_shared<PartialAllReduceTask>(PartialAllReduceTask::TYPE_START_AR,
+            var_id_gpu, data_len * sizeof(float), data_in, data_buffer, data_out);
+    {
+        std::lock_guard<std::mutex> guard(mtx_bg_thread);
+        bg_thread_queue.push(task);
+    }
+    sem_bg_thread.notify();
+    //task->done.wait();
+    return task;
 }
 
