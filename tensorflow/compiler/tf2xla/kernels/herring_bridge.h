@@ -68,6 +68,8 @@ private:
     HerringBridge(HerringBridge const&);
     void operator=(HerringBridge const&);
 
+    AllReduceHelper& helper;
+
     void bg_thread();
 
     std::mutex mtx_bg_thread;
