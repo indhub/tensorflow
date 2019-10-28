@@ -6,8 +6,10 @@
 #include <fstream>
 #include <string>
 #include <vector>
+#include <cassert>
 
 #include "cuda_runtime.h"
+#include "cuda_profiler_api.h"
 #include "nccl.h"
 #include "efa/include/mpi.h"
 
@@ -140,7 +142,7 @@ private:
 // Task
 //
 
-enum TaskType{D2H_COPY, H2D_COPY, D2H_COPY_COMPLETE, H2D_COPY_COMPLETE,
+enum TaskType{BEGIN_XLA_ALL_REDUCE, D2H_COPY, H2D_COPY, D2H_COPY_COMPLETE, H2D_COPY_COMPLETE,
   REDUCE_SCATTER, REDUCE_SCATTER_COMPLETE, ALL_GATHER, ALL_GATHER_COMPLETE,
   ACC_SEND, ACC_RECV, NCCL_ALL_REDUCE, DUMMY_COPY};
 
@@ -167,7 +169,7 @@ public:
   bool isLastBlock = false;
   std::vector<std::unique_ptr<Task> > subtasks;
   std::shared_ptr<DataReadyEvent> data_ready_event;
-  uint32_t* var_id_gpu;
+  const uint32_t* var_id_gpu;
 };
 
 //
@@ -213,8 +215,8 @@ public:
     task->var_id_gpu = var_id_gpu;
 
     {
-      std::lock_guard<std::mutex> guard(mtx_begin_xla_all_queue);
-      begin_xla_all_reduce_queue.push(std::move(new_task));
+      std::lock_guard<std::mutex> guard(mtx_begin_xla_all_reduce_queue);
+      begin_xla_all_reduce_queue.push(std::move(task));
     }
   }
 
@@ -995,7 +997,7 @@ private:
             sem_reduce_scatter_queue, sem_reduce_scatter_completion_queue,
             sem_all_gather_queue, sem_all_gather_completion_queue,
             sem_acc_send_queue, sem_acc_recv_queue,
-            sem_first_iteration_thread, sem_dummy_copy_thread, begin_xla_all_reduce_thread;
+            sem_first_iteration_thread, sem_dummy_copy_thread, sem_xla_all_reduce_thread;
   cudaStream_t d2h_stream, h2d_stream, reduce_scatter_stream, all_gather_stream, begin_stream,
                copy_to_var_stream, dummy_copy_stream, begin_xla_all_reduce_stream;
 public:
@@ -1070,7 +1072,6 @@ static cudaStream_t cudaStream;
 static ncclComm_t ncclComm;
 
 HerringBridge::HerringBridge() 
-    : helper(AllReduceHelper::getInstance())
 {
     // Get local rank
     MPICHECK(MPI_Init(NULL, NULL));
@@ -1101,10 +1102,14 @@ HerringBridge& HerringBridge::getInstance() {
 // ENTRY POINT
 //
 void HerringBridge::queue_allreduce(const uint32_t* var_id_gpu, int len, const void* data, void* buffer, void* output) {
-    helper.begin_xla_all_reduce(var_id_gpu, data, output, len, []{});
+    AllReduceHelper& helper = AllReduceHelper::getInstance();
+    //helper.begin_xla_all_reduce(var_id_gpu, data, output, len, [this, var_id_gpu]{ this->handle_ar_completion(var_id_gpu) });
+    helper.begin_xla_all_reduce(var_id_gpu, data, output, len, [this, var_id_gpu]{});
 }
 
-
+//
+// ENTRY POINT
+//
 void HerringBridge::copy_allreduced_data(const uint32_t* var_id,
         const void* data_in, void* buffer, void* dest, std::function<void()> asyncDoneCallback) {
     // Do CUDA operations from a seperate thread. Just wrap everything and send it to 
@@ -1177,45 +1182,6 @@ void HerringBridge::bg_thread() {
         auto task = bg_thread_queue.front(); bg_thread_queue.pop();
         //unsigned long milliseconds_since_epoch;
         switch(task->task_type) {
-        case PartialAllReduceTask::TYPE_START_AR:
-            // Copy the gradients to a temporary buffer and return immediately
-            cudaMemcpy(&(task->var_id_cpu), task->var_id_gpu, sizeof(uint32_t), cudaMemcpyDeviceToHost);
-            //milliseconds_since_epoch = std::chrono::duration_cast<std::chrono::milliseconds>
-            //    (std::chrono::system_clock::now().time_since_epoch()).count();
-            //std::cout << "timelog," << milliseconds_since_epoch << "," << task->var_id_cpu << std::endl;
-            cudaMemcpy((char*)task->buffer + offsets[task->var_id_cpu], task->data_in, 
-                    task->data_size, cudaMemcpyDeviceToDevice);
-
-            // If we have received all data for this segment, start a ncclAllReduce asynchronously
-            segment_id = segment_index[task->var_id_cpu]; // Which segment ID?
-            segment_recv_count[segment_id]++; // We received one more for this segment
-            if(segment_recv_count[segment_id] == segment_var_count[segment_id]) { // If we received all of them...
-
-                // Get a pointer to the corresponding data in the buffer
-                void* allreduce_ptr = (char*)task->buffer + segment_offset[segment_id];
-
-                // Get the length of the subsequence to AllReduce
-                int allreduce_length = segment_length[segment_id];
-
-                // Call NCCL AllReduce!
-                ncclAllReduce(allreduce_ptr, allreduce_ptr, segment_length[segment_id],
-                              ncclFloat32, ncclSum, ncclComm, cudaStream);
-
-                // Record an event. allreduce_event_handler will track this event and complete it.
-                auto cudaEvent = std::make_shared<CudaEvent>();
-                {
-                    // ToDo: This lock isn't really required. Test and remove.
-                    std::lock_guard<std::mutex> guard(mtx_finish_allreduce);
-                    queueAllReduceEvents.push(cudaEvent);
-                    queueAllReduceSegmentIds.push(segment_id);
-                }
-                sem_allreduce_event_available.notify();
-
-                // Reset number of grads received for this segment
-                segment_recv_count[segment_id] = 0;
-            }
-            task->done.notify();
-            break;
         case PartialAllReduceTask::TYPE_COPY_RESULT:
             // Get the var id
             cudaMemcpy(&(task->var_id_cpu), task->var_id_gpu, sizeof(uint32_t), cudaMemcpyDeviceToHost);
@@ -1247,15 +1213,3 @@ void HerringBridge::bg_thread() {
     }
 }
 
-std::shared_ptr<PartialAllReduceTask> HerringBridge::start_allreduce(const uint32_t* var_id_gpu, int data_len, 
-        const void* data_in, void* data_buffer, void* data_out) {
-    auto task = std::make_shared<PartialAllReduceTask>(PartialAllReduceTask::TYPE_START_AR, 
-            var_id_gpu, data_len * sizeof(float), data_in, data_buffer, data_out);
-    {
-        std::lock_guard<std::mutex> guard(mtx_bg_thread);
-        bg_thread_queue.push(task);
-    }
-    sem_bg_thread.notify();
-    task->done.wait();
-    return task;
-}

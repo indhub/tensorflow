@@ -13,15 +13,26 @@ private:
 
 public:
     void notify() {
+        //std::cout << "notify" << std::endl;
         std::lock_guard<decltype(mutex_)> lock(mutex_);
         ++count_;
         condition_.notify_one();
     }
 
+    void notify_multiple(int n) {
+      //std::cout << "notify_multiple" << std::endl;
+      std::lock_guard<decltype(mutex_)> lock(mutex_);
+      count_ += n;
+      //std::cout << "notify_all in notify_multiple" << std::endl;
+      condition_.notify_all();
+    }
+
     void wait() {
         std::unique_lock<decltype(mutex_)> lock(mutex_);
-        while(!count_)
+        while(!count_) {
             condition_.wait(lock);
+            //std::cout << "woke. Count: " << count_ << std::endl;
+        }
         --count_;
     }
 

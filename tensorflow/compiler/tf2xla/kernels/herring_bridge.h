@@ -68,16 +68,13 @@ private:
     HerringBridge(HerringBridge const&);
     void operator=(HerringBridge const&);
 
-    AllReduceHelper& helper;
+    //AllReduceHelper& helper;
 
     void bg_thread();
 
     std::mutex mtx_bg_thread;
     Semaphore sem_bg_thread;
     std::queue<std::shared_ptr<PartialAllReduceTask> > bg_thread_queue;
-
-    std::shared_ptr<PartialAllReduceTask> start_allreduce(const uint32_t* var_id_gpu, int data_size, 
-            const void* data_in, void* data_buffer, void* data_output);
 
     // AR segments
     std::map<int, int> offsets; // Offset of a given variable in buffer
